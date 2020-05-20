@@ -1,33 +1,54 @@
+var sqlite3 = require('sqlite3').verbose();
 
-exports.getPost = (req, res, next) => {
-  Post.findById(req.params.id)
-    .then(post => {
-      if (post) {
-        res.status(200).json(post);
-      } else {
-        res.status(404).json({ message: "Post not found!" });
-      }
-    })
-    .catch(error => {
-      res.status(500).json({
-        message: "Fetching post failed!"
-      });
-    });
+exports.getPage = (req, res) => {
+  let pageId = req.params.id;
+  let db = new sqlite3.Database('./temp/db.db');
+  db.on("trace", s => console.log(s))
+  db.get("SELECT * FROM Pages WHERE id = ? ORDER BY timestamp DESC", [pageId], (e, row) => {
+    if (row) {
+      res.status(200).json(row)
+    }
+    else {
+      res.status(404).json();
+    }
+  });
+  db.close();
 };
 
-exports.deletePost = (req, res, next) => {
-  Post.deleteOne({ _id: req.params.id, creator: req.userData.userId })
-    .then(result => {
-      console.log(result);
-      if (result.n > 0) {
-        res.status(200).json({ message: "Deletion successful!" });
-      } else {
-        res.status(401).json({ message: "Not authorized!" });
+exports.searchPages = (req, res, next) => {
+  let searchQuery = req.query.query;
+  let db = new sqlite3.Database('./temp/db.db');
+  let tokens = searchQuery.split(" ").map(t => t + '*');
+  let query = tokens.join(" OR ");
+  db.all("SELECT * FROM Pages WHERE modifiedReason IS NULL AND (title MATCH $query OR content MATCH $query) ORDER BY Rank", { $query: query },
+    (e, rows) => {
+      if (rows) {
+        res.status(200).json(rows)
       }
-    })
-    .catch(error => {
-      res.status(500).json({
-        message: "Deleting posts failed!"
-      });
+      else {
+        res.status(404).json();
+      }
     });
+  db.close();
 };
+
+exports.addPage = (req, res) => {
+  let db = new sqlite3.Database('./temp/db.db');
+  let page = req.body;
+  if (page.id) {
+    res.status(200).json(page);
+  } else {
+    const id = page.title.replace(" ", "_");
+    console.log(id);
+
+    db.run("INSERT INTO Pages (id, title, content, imagePath, modifiedReason, timestamp) VALUES (?,?,?,?,?,?)",
+      [id, page.title, page.content, page.imagePath, null, new Date().toISOString()], (err) => {
+        if (err) {
+          res.status(500).json(err);
+        }
+      });
+    res.status(200).json(id)
+  }
+
+  db.close();
+}
