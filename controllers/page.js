@@ -3,7 +3,7 @@ var sqlite3 = require('sqlite3').verbose();
 exports.getPage = (req, res) => {
   let pageId = req.params.id;
   let db = new sqlite3.Database('./temp/db.db');
-  db.get("SELECT * FROM Pages WHERE id = ? AND modifiedReason IS NULL ORDER BY timestamp DESC", [pageId], (e, row) => {
+  db.get("SELECT * FROM Pages WHERE id MATCH ? AND modifiedReason IS NULL ORDER BY timestamp DESC", [pageId], (e, row) => {
     if (row) {
       res.status(200).json(row)
     }
@@ -14,7 +14,22 @@ exports.getPage = (req, res) => {
   db.close();
 };
 
-exports.searchPages = (req, res, next) => {
+exports.getPages = (req, res) => {
+  let pageIds = req.params.ids;
+  console.log(pageIds)
+  let db = new sqlite3.Database('./temp/db.db');
+  db.get("SELECT id FROM Pages WHERE id IN (?) AND modifiedReason IS NULL ORDER BY timestamp DESC", [pageIds], (e, row) => {
+    if (row) {
+      res.status(200).json(row)
+    }
+    else {
+      res.status(404).json();
+    }
+  });
+  db.close();
+};
+
+exports.searchPages = (req, res) => {
   let searchQuery = req.query.query;
   let db = new sqlite3.Database('./temp/db.db');
   let tokens = searchQuery.split(" ").map(t => t + '*');
@@ -55,6 +70,42 @@ exports.addPage = (req, res) => {
         });
     }
   }, r => { res.status(500).json(r) });
+}
+
+exports.updatePage = (req, res) => {
+  let db = new sqlite3.Database('./temp/db.db');
+  let existingPage = req.body;
+
+  getPageByTitle(existingPage.title).then(foundPage => {
+    if (foundPage.id !== existingPage.id) {
+      res.status(409).json();
+    } else {
+      const now = new Date();
+      const updatePromise = new Promise((resolve, reject) => {
+        db.run("UPDATE Pages SET modifiedReason = ? WHERE id = ? AND timestamp = ?", [existingPage.modifiedReason, foundPage.id, foundPage.timestamp], err => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      })
+
+      updatePromise.then(() => {
+        db.run("INSERT INTO Pages (id, title, content, imagePath, modifiedReason, timestamp) VALUES (?,?,?,?,?,?)",
+          [foundPage.id, existingPage.title, existingPage.content, existingPage.imagePath, null, now.toISOString()], (err) => {
+            if (err) {
+              res.status(500).json(err);
+            } else {
+              res.status(200).json(existingPage)
+            }
+            db.close();
+          });
+      }, (err)=>{
+        res.status(500).json(err);
+      })
+    }
+  }, err => { res.status(500).json(err) });
 }
 
 function getPageByTitle(title) {
