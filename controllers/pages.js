@@ -79,7 +79,7 @@ exports.addPage = (req, res) => {
       res.status(409).json();
     } else {
       const now = new Date();
-      db.run("INSERT INTO Pages (id, title, content, modifiedReason, timestamp) VALUES (?,?,?,?,?,?)",
+      db.run("INSERT INTO Pages (id, title, content, modifiedReason, timestamp) VALUES (?,?,?,?,?)",
         [id, newPage.title, newPage.content, null, now.toISOString()], (err) => {
           if (err) {
             res.status(500).json(err);
@@ -114,7 +114,7 @@ exports.updatePage = (req, res) => {
       })
 
       updatePromise.then(() => {
-        db.run("INSERT INTO Pages (id, title, content, modifiedReason, timestamp) VALUES (?,?,?,?,?,?)",
+        db.run("INSERT INTO Pages (id, title, content, modifiedReason, timestamp) VALUES (?,?,?,?,?)",
           [foundPage.id, existingPage.title, existingPage.content, null, now.toISOString()], (err) => {
             if (err) {
               res.status(500).json(err);
